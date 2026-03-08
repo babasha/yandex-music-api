@@ -1,3 +1,6 @@
+# GUI config (contains token)
+gui/.gui_config.json
+
 # Byte-compiled / optimized / DLL files
 .idea
 *.iml

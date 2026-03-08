@@ -32,14 +32,29 @@ def add_cors(response):
 # Global state
 client_storage = {}
 download_progress = {}
-app_settings = {
-    'downloads_dir': str(Path(__file__).resolve().parent.parent / 'downloads'),
-}
+CONFIG_FILE = Path(__file__).resolve().parent / '.gui_config.json'
+DEFAULT_DOWNLOADS = str(Path(__file__).resolve().parent.parent / 'downloads')
+
+
+def load_config():
+    """Load saved config from disk."""
+    try:
+        return json.loads(CONFIG_FILE.read_text())
+    except Exception:
+        return {}
+
+
+def save_config(data):
+    """Save config to disk."""
+    cfg = load_config()
+    cfg.update(data)
+    CONFIG_FILE.write_text(json.dumps(cfg))
 
 
 def get_downloads_dir():
     """Get current downloads directory, creating it if needed."""
-    d = Path(app_settings['downloads_dir'])
+    cfg = load_config()
+    d = Path(cfg.get('downloads_dir', DEFAULT_DOWNLOADS))
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -47,6 +62,24 @@ def get_downloads_dir():
 def get_client():
     """Get the current authenticated client."""
     return client_storage.get('client')
+
+
+def restore_session():
+    """Try to restore client from saved token."""
+    if get_client():
+        return
+    cfg = load_config()
+    token = cfg.get('token')
+    if token:
+        try:
+            cl = Client(token, report_unknown_fields=False).init()
+            client_storage['client'] = cl
+        except Exception:
+            pass
+
+
+# Restore session on startup
+restore_session()
 
 
 def get_downloaded_files():
@@ -98,7 +131,7 @@ def index():
 @app.route('/api/settings', methods=['GET'])
 def get_settings():
     """Get current app settings."""
-    return jsonify({'downloads_dir': app_settings['downloads_dir']})
+    return jsonify({'downloads_dir': str(get_downloads_dir())})
 
 
 @app.route('/api/settings', methods=['POST'])
@@ -114,8 +147,9 @@ def update_settings():
         path.mkdir(parents=True, exist_ok=True)
         if not os.access(str(path), os.W_OK):
             return jsonify({'error': 'Нет прав на запись в эту папку'}), 400
-        app_settings['downloads_dir'] = str(path.resolve())
-        return jsonify({'success': True, 'downloads_dir': app_settings['downloads_dir']})
+        resolved = str(path.resolve())
+        save_config({'downloads_dir': resolved})
+        return jsonify({'success': True, 'downloads_dir': resolved})
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 
@@ -239,6 +273,7 @@ def auto_login():
     try:
         cl = Client(token, report_unknown_fields=False).init()
         client_storage['client'] = cl
+        save_config({'token': token})
         account = cl.me.account
         return jsonify({
             'success': True,
@@ -294,6 +329,7 @@ def login():
     try:
         cl = Client(token, report_unknown_fields=False).init()
         client_storage['client'] = cl
+        save_config({'token': token})
         account = cl.me.account
         return jsonify({
             'success': True,
@@ -311,6 +347,7 @@ def login():
 def logout():
     """Logout."""
     client_storage.pop('client', None)
+    save_config({'token': ''})
     return jsonify({'success': True})
 
 

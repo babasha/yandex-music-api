@@ -418,10 +418,18 @@ function renderTrackList(container, tracks, context) {
 
     tracks.forEach(track => {
         const row = document.createElement('div');
-        row.className = 'track-row';
+        row.className = 'track-row' + (track.downloaded ? ' track-downloaded' : '');
         row.dataset.trackId = track.id;
 
         const hasCheckbox = context === 'likes' || context === 'playlist' || context === 'search';
+
+        const dlIcon = track.downloaded
+            ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                   <path d="M20 6L9 17l-5-5"/>
+               </svg>`
+            : `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                   <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+               </svg>`;
 
         row.innerHTML = `
             <div class="track-checkbox">
@@ -446,10 +454,8 @@ function renderTrackList(container, tracks, context) {
             <div class="track-album" onclick="${track.album_id ? `openAlbum(${track.album_id})` : ''}">${esc(track.album)}</div>
             <div class="track-duration">${track.duration}</div>
             <div class="track-actions">
-                <button class="btn-download" onclick="downloadOne(${track.id}, this)" title="Скачать">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
-                    </svg>
+                <button class="btn-download ${track.downloaded ? 'downloaded' : ''}" onclick="downloadOne(${track.id}, this)" title="${track.downloaded ? 'Скачано' : 'Скачать'}">
+                    ${dlIcon}
                 </button>
             </div>
         `;
@@ -501,6 +507,11 @@ async function downloadOne(trackId, btn) {
         });
         btn.classList.remove('downloading');
         btn.classList.add('downloaded');
+        btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>`;
+        btn.title = 'Скачано';
+        // Mark the row
+        const row = btn.closest('.track-row');
+        if (row) row.classList.add('track-downloaded');
         toast('Трек скачан!', 'success');
     } catch (e) {
         btn.classList.remove('downloading');
@@ -765,3 +776,13 @@ function esc(str) {
     el.textContent = str;
     return el.innerHTML;
 }
+
+/* === Auto-restore session on page load === */
+(async function checkSession() {
+    try {
+        const data = await api('/api/auth-status');
+        if (data.authenticated) {
+            onLoginSuccess(data.user);
+        }
+    } catch {}
+})();
